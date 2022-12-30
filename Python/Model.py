@@ -6,7 +6,9 @@ math.pi2 = math.pi*2
 
 
 def shadow(surf, shading):
+    # Get the pixels from the surf
     image = pygame.surfarray.pixels3d(surf).astype("float32")
+    # Multiply each pixel by the shading value
     numpy.multiply(image, numpy.float32(shading), out=image)
 
 
@@ -49,6 +51,7 @@ class Model:
             for k in range(int(self.scale*zoom)):
                 surf.blit(transformed, (x-transformed.get_width()/2, y -
                           transformed.get_height()/2 - k + zoom*len(self.slices)/2 - i*zoom))
+
 
     def _draw(self, surf, x, y, zoom=1, squash=0.5, shading=1):
         squash = 1-squash
@@ -116,6 +119,6 @@ class Model:
                         leftMost = x
 
         # resize the bounding box of each surface in arr to the the new shrinked size
-        for surface in arr:
-            surface = pygame.Surface.subsurface(
-                surface, (leftMost, topMost, (rightMost - leftMost), (bottomMost-topMost)))
+        for i in range(len(arr)):
+            arr[i] =pygame.Surface.subsurface(
+                arr[i], (leftMost, topMost, (rightMost - leftMost), (bottomMost-topMost)))
