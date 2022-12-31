@@ -1,5 +1,6 @@
 from copy import *
 import pygame
+from numba import jit
 import numpy
 import math
 math.pi2 = math.pi*2
@@ -17,6 +18,7 @@ class Model:
         image = pygame.image.load(filename).convert_alpha()
         self.slices = []
         height = image.get_height() / numSlices
+        self.rendered = None
 
         self.numSlices = numSlices
         for i in range(numSlices):
@@ -77,10 +79,14 @@ class Model:
         self.setRotation(temp)
 
     def compile(self, angles=180, zoom=1, squash=0.5, shading=0):
-        res = []
-        surf = pygame.Surface((4*100, 4*100), pygame.SRCALPHA)
-        surfMin = pygame.Surface((4*100, 4*100), pygame.SRCALPHA)
-        surfMin.fill((0, 0, 0, 0))
+        self.rendered = []
+        # Calculate the size of the buffer surface
+        # It is determined by the base of the model size times the zoom, then rotated 45 degrees (max)
+        diag = math.ceil(math.sqrt(self.slices[0].get_width()**2 + self.slices[0].get_height()**2)) * 2
+        numSlices = len(self.slices)
+        h = (numSlices + diag * 2) * zoom
+        surf = pygame.Surface((diag, h), pygame.SRCALPHA)
+        surfMin = pygame.Surface((diag, h), pygame.SRCALPHA)
         for rot in range(angles):
             surf.fill((0, 0, 0, 0))
             # draw start
@@ -89,11 +95,19 @@ class Model:
 
             render = pygame.transform.rotozoom(surf, 0, 0.5)
 
-            res.append(render)
+            self.rendered.append(render)
             surfMin.blit(render, (0, 0))
-            #pygame.image.save(render,"renders\\"+str(rot) + tag + ".png")
-        Model.shrink(surfMin, res)
-        return res
+
+        Model.shrink(surfMin, self.rendered)
+        return self
+        
+    def snap(self, rotation):
+        assert(self.rendered != None)
+        return self.rendered[round(rotation*len(self.rendered)/360) % len(self.rendered)]
+    
+    def snapRadians(self, rotation):
+        degrees = rotation*180/math.pi
+        return self.snap(degrees)
 
     @staticmethod
     def shrink(mask, arr):
@@ -117,8 +131,29 @@ class Model:
                         rightMost = x
                     elif x < leftMost:
                         leftMost = x
+        # Same code as above, but using numpy iteration
+        # maskArray = pygame.surfarray.pixels_alpha(mask)
+        # topMost = dimensions[1]
+        # leftMost = dimensions[0]
+        # bottomMost = 0
+        # rightMost = 0
+        # for x in range(maskArray.shape[0]):
+        #     for y in range(maskArray.shape[1]):
+        #         if maskArray[x, y] != 0:
+        #             if x > bottomMost:
+        #                 bottomMost = x
+        #             elif x < topMost:
+        #                 topMost = x
+        #             if y > rightMost:
+        #                 rightMost = y
+        #             elif y < leftMost:
+        #                 leftMost = y
+
+
 
         # resize the bounding box of each surface in arr to the the new shrinked size
         for i in range(len(arr)):
             arr[i] =pygame.Surface.subsurface(
                 arr[i], (leftMost, topMost, (rightMost - leftMost), (bottomMost-topMost)))
+
+#
