@@ -9,13 +9,11 @@ import pygame
 import numpy
 import math
 import os
+from copy import copy, deepcopy
 
 # Voxine imports
-from Model import *
-
-# Utility functions for Voxine development
-def NOOP(*args, **kwargs):
-    pass
+from voxUtils import coordsToIso, isoToCoords
+from Model import Model
 
 class Engine:
     def __init__(self, debug = False):
@@ -164,21 +162,10 @@ class Camera:
         self.rotation = rotation
     
     def updateIsoCoords(self):
-        self.isoCoords = self.coordsToIso(self.coords)
+        self.isoCoords = coordsToIso(self.coords)
     
     def updateCoords(self):
-        self.coords = self.isoToCoords(self.isoCoords)
-    
-    def coordsToIso(self, coords):
-        x = coords[0]
-        y = coords[1]
-        z = coords[2]
-        return (x - y, (x + y) / 2 - z)
-    
-    def isoToCoords(self, isoCoords):
-        x = isoCoords[0]
-        y = isoCoords[1]
-        return (x + y, x - y, -y)
+        self.coords = isoToCoords(self.isoCoords)
     
     def renderShadows(self, instances, surf):
         for instance in instances:
@@ -188,7 +175,7 @@ class Camera:
         coord = copy(instance.getCoords())
         # Zero out the z coord
         coord = (coord[0], coord[1], 0)
-        coord = self.coordsToIso(coord)
+        coord = coordsToIso(coord)
         instSize = instance.snap().get_size()
         coord = (coord[0] + surf.get_width() / 2,
                  coord[1] + surf.get_height() / 2 )
@@ -196,6 +183,8 @@ class Camera:
 
     
     def renderList(self, instances, surf):
+        # Order instances by render y
+        instances = sorted(instances, key=lambda instance: coordsToIso(instance.getCoords())[1]) #TODO: Optimize
         for instance in instances:
             self.renderInstance(instance, surf)
     
@@ -206,7 +195,7 @@ class Camera:
         instanceCoords = (instanceCoords[0] - self.coords[0], instanceCoords[1] - self.coords[1], instanceCoords[2] - self.coords[2])
         # Apply camera rotation (not yet implemented)
         # To Iso
-        instanceCoords = self.coordsToIso(instanceCoords)
+        instanceCoords = coordsToIso(instanceCoords)
         # Add half of the screen size
         instanceCoords = (instanceCoords[0] + surf.get_width() / 2, instanceCoords[1] + surf.get_height() / 2)
         # Blit
@@ -277,9 +266,9 @@ class ModelManager:
         else:
             raise Exception("Model not found")
     
-    def addModelAndLoad(self, name, filename, numSlices, scale = 1):
+    def addModelAndLoad(self, name, filename, numSlices, scale = 1, zoom = 4, angles = 180):
         model = Model(filename, numSlices, scale)
-        model.compile()
+        model.compile(angles = angles, zoom = zoom)
         self.models[name] = model
     
     def addModel(self, name, model):

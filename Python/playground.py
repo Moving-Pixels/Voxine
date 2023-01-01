@@ -2,8 +2,11 @@ import pygame
 from pygame.locals import *
 from Model import *
 from Voxine import *
+from voxUtils import NOOP
 import math
 import os
+import time
+from PIL import Image, ImageDraw
 size = w,h = 1200,1200
 pygame.init()
 wn = pygame.display.set_mode(size, DOUBLEBUF)
@@ -18,9 +21,9 @@ def main():
     
     global models
     clock = pygame.time.Clock()
-    boxModel = Model("../testAssets/box.png",17,1)
+    boxModel = Model("../testAssets/Marshall.png",41,1)
     model = boxModel
-    models["box"] = model.compile(zoom=3)
+    models["box"] = model.compile(zoom=1)
 
     while 1:
         events = pygame.event.get()
@@ -52,6 +55,7 @@ def main():
         pygame.display.update()
         clock.tick()
 
+
 def engineMain():
     engine = Engine(debug = True)
     scene1 = Scene(engine)
@@ -60,27 +64,38 @@ def engineMain():
     camera1 = Camera(scene1)
     scene1.setPrimaryCamera(camera1)
     modelManager = engine.getModelManager()
-    modelManager.addModelAndLoad("box", "../testAssets/box.png", 17, 1)
+    print("Loading models...")
+    time1 = time.time()
+    print("Model 1 of 1: box")
+    modelManager.addModelAndLoad("box", "testAssets/Marshall.png", 41, scale = 1, zoom = 4, angles = 360)
+    print("Done loading models in " + str(time.time() - time1) + " seconds")
+
+
 
     def instanceStep(self):
         time = pygame.time.get_ticks()
-        x = math.sin(time/1000 + self.rotationDelta) * 100
-        y = math.cos(time/1000 + self.rotationDelta) * 100
-        z = 100 + math.sin(time/100 + self.rotationDelta) * 20
+        self.rotation[2] += 1
+        z=100
+        return
+        x =       math.sin( time/1000 + self.rotationDelta ) * 200
+        y =       math.cos( time/1000 + self.rotationDelta ) * 200
+        z = 100 # 100 + math.sin( time/100  + self.rotationDelta ) * 20
         self.coords = (x, y, z)
         time2 = time/3
-        addX = math.sin(time2/1000 + self.rotationDelta) * x
-        addY = math.cos(time2/1000 + self.rotationDelta) * y
-        addZ = math.sin(time2/100 + self.rotationDelta) * z
+        addX = math.sin( time2/1000 + self.rotationDelta ) * 200
+        addY = math.cos( time2/1000 + self.rotationDelta ) * 200
+        addZ = 0 # math.sin( time2/100  + self.rotationDelta ) * 20 
         self.coords = (self.coords[0] + addX,
                        self.coords[1] + addY, self.coords[2] + addZ)
-        self.rotation[2] += 0.05
+        self.rotation[2] += (300 - (abs(x) + abs(y)))/150
     
-    for i in range(100):
+    for i in range(1):
         instance = Instance(scene1, modelManager.getModel("box"), [0, 0, 0], [0, 0, 0], step=instanceStep, init = NOOP)
-        instance.rotationDelta = 360 * i/100
+        instance.rotationDelta = 360 * i/25
         # To radians
+        instance.rotation[2] = instance.rotationDelta
         instance.rotationDelta = instance.rotationDelta * math.pi / 180
+        
 
     drawSurface = pygame.Surface(size)
     clock = pygame.time.Clock()
@@ -96,6 +111,7 @@ def engineMain():
         pygame.display.update()
         clock.tick(60)
     
+
 
         
 

@@ -1,8 +1,9 @@
 from copy import *
 import pygame
 from numba import jit
-import numpy
+import numpy, numpy as np
 import math
+from voxUtils import coordsToIso, pointDistance2D
 math.pi2 = math.pi*2
 
 
@@ -82,15 +83,38 @@ class Model:
         self.rendered = []
         # Calculate the size of the buffer surface
         # It is determined by the base of the model size times the zoom, then rotated 45 degrees (max)
-        diag = math.ceil(math.sqrt(self.slices[0].get_width()**2 + self.slices[0].get_height()**2)) * 2
-        numSlices = len(self.slices)
-        h = (numSlices + diag * 2) * zoom
-        surf = pygame.Surface((diag, h), pygame.SRCALPHA)
-        surfMin = pygame.Surface((diag, h), pygame.SRCALPHA)
+        # To calculate the diagonal, we use the pythagorean theorem. One issue is that we are in the isometric space, so the projected angle is not rectangular.
+        # We will simulate the bounding box of the whole model, then calculate the coords of certaing corners. Project them in the isometric space, and calculate the dimensions.
+        w = self.slices[0].get_width()*zoom
+        h = self.slices[0].get_height()*zoom
+        zheight = self.numSlices*zoom
+        # pleft   = coordsToIso((0, 0, 0))
+        # print("pleft: " + str(pleft))
+        # pright  = coordsToIso((w, h, 0))
+        # print("pright: " + str(pright))
+        # ptop    = coordsToIso((w, 0, zheight))
+        # print("ptop: " + str(ptop))
+        # pbot    = coordsToIso((0, h, 0))
+        # print("pbot: " + str(pbot))
+        pleft = coordsToIso((0, h, 0))
+        print("pleft: " + str(pleft))
+        pright  = coordsToIso((w, 0, 0))
+        print("pright: " + str(pright))
+        ptop    = coordsToIso((w, h, 0))
+        print("ptop: " + str(ptop))
+        pbot    = coordsToIso((0, 0, zheight))
+        print("pbot: " + str(pbot))
+        bbowDim = (math.ceil(pointDistance2D(pleft, pright)), math.ceil(pointDistance2D(pbot, ptop)))
+        print("Bounding box: " + str(bbowDim))
+        surf = pygame.Surface(bbowDim, pygame.SRCALPHA)
+        surfMin = pygame.Surface(bbowDim, pygame.SRCALPHA)
+        angl360 = 360/angles
+        zoom2 = 2*zoom
         for rot in range(angles):
-            surf.fill((0, 0, 0, 0))
+            print("Rendering: " + str(rot) + "/" + str(angles))
+            surf.fill((255, 0, 0, 255))
             # draw start
-            self.drawRotate(surf, rot*360/angles, 2*zoom, squash, shading)
+            self.drawRotate(surf, rot*angl360, zoom2, squash, shading)
             # draw end
 
             render = pygame.transform.rotozoom(surf, 0, 0.5)
@@ -99,6 +123,7 @@ class Model:
             surfMin.blit(render, (0, 0))
 
         Model.shrink(surfMin, self.rendered)
+        print("Shrunk size: " + str(self.rendered[0].get_size()))
         return self
         
     def snap(self, rotation):
@@ -112,48 +137,12 @@ class Model:
     @staticmethod
     def shrink(mask, arr):
         # find center of the mask surface
-        dimensions = mask.get_size()
-        topMost = dimensions[1]
-        leftMost = dimensions[0]
-        bottomMost = 0
-        rightMost = 0
-        # iterate through pixels of the mask surface
-        for x in range(dimensions[0]):
-            for y in range(dimensions[1]):
-                if mask.get_at((x, y))[3] != 0:
-                    # if pixel is not transparent, update the top and bottom most values
-                    if y > bottomMost:
-                        bottomMost = y
-                    elif y < topMost:
-                        topMost = y
-                    # update the left and right most values
-                    if x > rightMost:
-                        rightMost = x
-                    elif x < leftMost:
-                        leftMost = x
-        # Same code as above, but using numpy iteration
-        # maskArray = pygame.surfarray.pixels_alpha(mask)
-        # topMost = dimensions[1]
-        # leftMost = dimensions[0]
-        # bottomMost = 0
-        # rightMost = 0
-        # for x in range(maskArray.shape[0]):
-        #     for y in range(maskArray.shape[1]):
-        #         if maskArray[x, y] != 0:
-        #             if x > bottomMost:
-        #                 bottomMost = x
-        #             elif x < topMost:
-        #                 topMost = x
-        #             if y > rightMost:
-        #                 rightMost = y
-        #             elif y < leftMost:
-        #                 leftMost = y
-
-
-
+        # get the alpha channel of the mask surface
+        alphaMask = pygame.surfarray.pixels_alpha(mask)
+        rows = np.any(alphaMask, axis=1)
+        cols = np.any(alphaMask, axis=0)
+        topMost, bottomMost = np.where(cols)[0][[0, -1]]
+        leftMost, rightMost = np.where(rows)[0][[0, -1]]
         # resize the bounding box of each surface in arr to the the new shrinked size
         for i in range(len(arr)):
-            arr[i] =pygame.Surface.subsurface(
-                arr[i], (leftMost, topMost, (rightMost - leftMost), (bottomMost-topMost)))
-
-#
+            arr[i] = pygame.Surface.subsurface(arr[i], (leftMost, topMost, (rightMost - leftMost), (bottomMost-topMost)))
