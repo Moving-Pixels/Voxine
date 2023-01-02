@@ -266,9 +266,9 @@ class ModelManager:
         else:
             raise Exception("Model not found")
     
-    def addModelAndLoad(self, name, filename, numSlices, scale = 1, zoom = 4, angles = 180):
+    def addModelAndLoad(self, name, filename, numSlices, scale = 1, zoom = 4, angles = 180, shading = 0.5):
         model = Model(filename, numSlices, scale)
-        model.compile(angles = angles, zoom = zoom)
+        model.compile(angles = angles, zoom = zoom, shading = shading)
         self.models[name] = model
     
     def addModel(self, name, model):

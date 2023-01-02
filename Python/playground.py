@@ -58,7 +58,7 @@ def main():
 
 def engineMain():
     engine = Engine(debug = True)
-    scene1 = Scene(engine)
+    scene1 = Scene(engine) 
     engine.addScene(scene1)
     engine.setCurrentScene(scene1)
     camera1 = Camera(scene1)
@@ -67,7 +67,15 @@ def engineMain():
     print("Loading models...")
     time1 = time.time()
     print("Model 1 of 1: box")
-    modelManager.addModelAndLoad("box", "testAssets/Marshall.png", 41, scale = 1, zoom = 4, angles = 360)
+    #modelManager.addModelAndLoad("Marshall",    "testAssets/Marshall.png",      41,     scale = 1, zoom = 2, angles = 360)
+    #modelManager.addModelAndLoad("box",         "testAssets/box.png",           17,     scale = 1, zoom = 4, angles = 360)
+    #modelManager.addModelAndLoad("ufo",         "testAssets/ufo.png",           17,     scale = 1, zoom = 4, angles = 360)
+    #modelManager.addModelAndLoad("mushroom",    "testAssets/mushroom.png",      7,      scale = 1, zoom = 4, angles = 360)
+    modelManager.addModelAndLoad("monument1",    "testAssets/monument.png",      126,    scale = 1, zoom = 2, angles = 30, shading = 0)
+    modelManager.addModelAndLoad("monument2",    "testAssets/monument.png",      126,    scale = 1, zoom = 2, angles = 30, shading = 0.25)
+    modelManager.addModelAndLoad("monument3",    "testAssets/monument.png",      126,    scale = 1, zoom = 2, angles = 30, shading = 0.5)
+    modelManager.addModelAndLoad("monument4",    "testAssets/monument.png",      126,    scale = 1, zoom = 2, angles = 30, shading = 0.75)
+    modelManager.addModelAndLoad("monument5",    "testAssets/monument.png",      126,    scale = 1, zoom = 2, angles = 30, shading = 1)
     print("Done loading models in " + str(time.time() - time1) + " seconds")
 
 
@@ -89,12 +97,25 @@ def engineMain():
                        self.coords[1] + addY, self.coords[2] + addZ)
         self.rotation[2] += (300 - (abs(x) + abs(y)))/150
     
-    for i in range(1):
-        instance = Instance(scene1, modelManager.getModel("box"), [0, 0, 0], [0, 0, 0], step=instanceStep, init = NOOP)
-        instance.rotationDelta = 360 * i/25
-        # To radians
-        instance.rotation[2] = instance.rotationDelta
-        instance.rotationDelta = instance.rotationDelta * math.pi / 180
+    def rotateStep(self):
+        self.rotation = (self.rotation[0], self.rotation[1], self.rotation[2] + 1)
+    # for i in range(1):
+    #     instance = Instance(scene1, modelManager.getModel("box"), [0, 0, 0], [0, 0, 0], step=instanceStep, init = NOOP)
+    #     instance.rotationDelta = 360 * i/25
+    #     # To radians
+    #     instance.rotation[2] = instance.rotationDelta
+    #     instance.rotationDelta = instance.rotationDelta * math.pi / 180
+    #rob = Instance(scene1, modelManager.getModel("Marshall"),(-400,-400,0),(0,0,0),step=rotateStep,init=NOOP)
+    #box = Instance(scene1, modelManager.getModel("box"),(-200,-200,0),(0,0,0),step=rotateStep,init=NOOP)
+    #ufo = Instance(scene1, modelManager.getModel("ufo"),(400,400,0),(0,0,0),step=rotateStep,init=NOOP)
+    #mushroom = Instance(scene1, modelManager.getModel("mushroom"),(200,200,0),(0,0,0),step=rotateStep,init=NOOP)
+    monument1 = Instance(scene1, modelManager.getModel("monument1"),(-400, 0,100),(0,0,0),step=rotateStep,init=NOOP)
+    monument2 = Instance(scene1, modelManager.getModel("monument2"),(-300,-100,100),(0,0,0),step=rotateStep,init=NOOP)
+    monument3 = Instance(scene1, modelManager.getModel("monument3"),(-200,-200,100),(0,0,0),step=rotateStep,init=NOOP)
+    monument4 = Instance(scene1, modelManager.getModel("monument4"),(-100,-300,100),(0,0,0),step=rotateStep,init=NOOP)
+    monument5 = Instance(scene1, modelManager.getModel("monument5"),(0,-400,100),(0,0,0),step=rotateStep,init=NOOP)
+
+
         
 
     drawSurface = pygame.Surface(size)
