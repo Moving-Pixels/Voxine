@@ -9,10 +9,11 @@ import pygame
 import numpy
 import math
 import os
-from copy import copy, deepcopy
+from copy import copy
 
 # Voxine imports
 from voxUtils import coordsToIso, isoToCoords
+from voxConstants import PREBAKE_NOBAKE, PREBAKE_MULTIPLY, PREBAKE_MINIMUM
 from Model import Model
 
 class Engine:
@@ -51,7 +52,6 @@ class Engine:
         camera.renderShadows(instances, surf)
         camera.renderList(instances, surf)
     
-
 class SceneManager:
     def __init__(self, engine):
         self.engine = engine
@@ -172,14 +172,28 @@ class Camera:
             self.renderShadow(instance, surf)
     
     def renderShadow(self, instance, surf):
-        coord = copy(instance.getCoords())
-        # Zero out the z coord
-        coord = (coord[0], coord[1], 0)
-        coord = coordsToIso(coord)
-        instSize = instance.snap().get_size()
-        coord = (coord[0] + surf.get_width() / 2,
-                 coord[1] + surf.get_height() / 2 )
-        pygame.draw.ellipse(surf, (0, 0, 0), (coord[0], coord[1], instSize[0], instSize[1]))
+        # Check if the instance's model has a rendered shadow
+        if instance.getModel().hasShadow():
+            return
+            # Blit the shadow
+            shadow = instance.getModel().baseShadow
+            shadow = pygame.transform.rotate(shadow, self.rotation[2])
+            shadow = pygame.transform.scale(shadow, instance.snap().get_size())
+            coord = copy(instance.getCoords())
+            # Zero out the z coord
+            coord = (coord[0], coord[1], 0)
+            coord = coordsToIso(coord)
+            instSize = instance.snap().get_size()
+            coord = ( coord[0] + surf.get_width() / 2, coord[1] + surf.get_height() / 2 )
+            surf.blit(shadow, (coord[0], coord[1]))
+        else:
+            coord = copy(instance.getCoords())
+            # Zero out the z coord
+            coord = (coord[0], coord[1], 0)
+            coord = coordsToIso(coord)
+            instSize = instance.snap().get_size()
+            coord = ( coord[0] + surf.get_width() / 2, coord[1] + surf.get_height() / 2 )
+            pygame.draw.ellipse(surf, (0, 0, 0), (coord[0], coord[1], instSize[0], instSize[1]))
 
     
     def renderList(self, instances, surf):
@@ -266,9 +280,9 @@ class ModelManager:
         else:
             raise Exception("Model not found")
     
-    def addModelAndLoad(self, name, filename, numSlices, scale = 1, zoom = 4, angles = 180, shading = 0.5):
+    def addModelAndLoad(self, name, filename, numSlices, scale = 1, zoom = 4, angles = 180, shading = 0.5, shadowSigma = 1, shadeMode = PREBAKE_MULTIPLY):
         model = Model(filename, numSlices, scale)
-        model.compile(angles = angles, zoom = zoom, shading = shading)
+        model.compile(angles = angles, zoom = zoom, bake = shadeMode, shading = shading, shadowSigma = shadowSigma)
         self.models[name] = model
     
     def addModel(self, name, model):

@@ -1,32 +1,23 @@
 from copy import *
 import pygame
 from numba import jit
-import numpy, numpy as np
+import numpy as np
 import scipy
 from scipy import ndimage
 import math
 from voxUtils import coordsToIso, pointDistance2D, rotatePoint3D
-math.pi2 = math.pi*2
+from voxConstants import PREBAKE_NOBAKE, PREBAKE_MULTIPLY, PREBAKE_MINIMUM
 
-
-def shadow(surf, shading):
-    # Get the pixels from the surf
-    image = pygame.surfarray.pixels3d(surf).astype("float32")
-    # Multiply each row by the shading, so that the bottom row are * shading and the top row are * 1
-    for slice in range(surf.get_height()):
-        image[slice, :, :] *= (1 - shading * slice / surf.get_height())
-    return surf
-
-
-
-
-
+## Model Class ##
+# This class is used to store and render 3D models. Usually, user code will use the ModelManager class to load models.
 class Model:
+    
     def __init__(self, filename, numSlices, scale=1):
         image = pygame.image.load(filename).convert_alpha()
         self.slices = []
         height = image.get_height() / numSlices
         self.rendered = None
+        self.baseShadow = None
 
         self.numSlices = numSlices
         for i in range(numSlices):
@@ -43,89 +34,74 @@ class Model:
 
         self.rotation = 0
         self.scale = scale
+    
+    def hasShadow(self):
+        return self.baseShadow != None
 
     def setRotation(self, value):
         self.rotation = value % 360
 
-    def draw(self, surf, x, y, zoom=1, squash=0.5, shading=0.5):
-        squash = 1-squash
-        rotatedBase = pygame.transform.rotate(pygame.transform.scale(self.slices[0], (int(self.slices[0].get_width()*zoom), int(self.slices[0].get_height()*zoom))), self.rotation)
-        rotatedBase = pygame.transform.scale(rotatedBase, (int(rotatedBase.get_width()), int(rotatedBase.get_height()*squash)))
-        rotatedShadowSurface = np.ones_like(pygame.surfarray.pixels3d(rotatedBase)).astype("float32")
-        blitList = []
-        shadowList = []
-        # In order to shade the model, we need to draw the slices from the top down, so that the bottom slices are shaded by the top slices
-        # This poses a problem, since bottom slices will be drawn over top slices.
-        # To solve this, we will use a different blending mode to draw the slices, so that when drawing a slice, it will only draw the pixels that are not already drawn (alpha = 0)
-        for i in range(self.numSlices):
-            transformed = self.slices[i]
-            transformed = pygame.transform.rotate(pygame.transform.scale(transformed, (int(transformed.get_width()*zoom), int(transformed.get_height()*zoom))), self.rotation)
-            transformed = pygame.transform.scale(transformed, (int(transformed.get_width()), int(transformed.get_height()*squash)))
-            # Calculate a new shadow surface for the next layer as a matrix of 1s and shading-s, where shading is where the pixel is visible
-            # and 1 is where the pixel is not visible
-            newShadowSurface = np.where(pygame.surfarray.array_alpha(transformed) > 0, shading, 1)
-            # Make it a 3d array that has 0:2 as the RGB values, replicating the shading value
-            newShadowSurface = np.repeat(newShadowSurface[:, :, np.newaxis], 3, axis=2)
-            # Apply rotated shadow by multiplying the current slice pointwise with the shadow surface
-            transformedNumpy = pygame.surfarray.pixels3d(transformed).astype("float32")
-            transformedNumpy *= rotatedShadowSurface
-            # Update the transformed surface with the new values
-            pygame.surfarray.pixels3d(transformed)[:] = transformedNumpy
-            # Apply the new shadow surface to the old shadow surface
-            rotatedShadowSurface *= newShadowSurface
-            # Apply gaussian blur to the shadow surface
-            rotatedShadowSurface = scipy.ndimage.filters.gaussian_filter(rotatedShadowSurface, 0.75, mode = 'constant', cval = 1.0)
-            # Add the transformed surface to the blit list
-            blitList.append(transformed)
-        
-        # Draw the slices from the bottom up
-        for i in range(self.numSlices):
-            transformed = blitList[self.numSlices-1-i]
-            for k in range(int(self.scale*zoom)):
-                surf.blit(transformed, (x-transformed.get_width()/2, y -
-                          transformed.get_height()/2 - k + zoom*len(self.slices)/2 - i*zoom))
-
-
-    def _draw(self, surf, x, y, zoom=1, squash=0.5, shading=1):
+    def draw(self, surf, x, y, zoom=1, squash=0.5):
         squash = 1-squash
         for i in range(self.numSlices):
-            j = self.numSlices-1-i
-            transformed = pygame.transform.rotozoom(
-                self.slices[j], self.rotation, zoom)
-            transformed = pygame.transform.scale(transformed, (int(
-                transformed.get_width()), int(transformed.get_height()*squash)))
-            #shadow(transformed,1-shading)
+            j = self.numSlices - 1 - i
+            transformed = self.slices[j]
+            transformed = pygame.transform.rotate(
+                pygame.transform.scale(
+                    transformed, 
+                    (int(transformed.get_width()*zoom), int(transformed.get_height()*zoom))
+                ), 
+            self.rotation )
 
-            tSize = (x-transformed.get_width()/2, y - transformed.get_height() /
-                     2 + self.scale*zoom*self.numSlices/2 - i*zoom*self.scale)
+            transformed = pygame.transform.scale(
+                transformed, 
+                (int(transformed.get_width()), int(transformed.get_height()*squash))
+            )
 
-            for k in range(int(self.scale*zoom)):
-                surf.blit(transformed, (tSize[0], tSize[1]-k))
+            for k in range(int(zoom)):
+                surf.blit(transformed, (x-transformed.get_width()/2, y - transformed.get_height()/2 - k + zoom*len(self.slices)/2 - i*zoom))
 
-    def drawRotate(self, surf, rotation, zoom, squash, shading):
+    def drawRotate(self, surf, rotation, zoom, squash):
         temp = self.rotation
         self.setRotation(rotation)
-        self.draw(surf, surf.get_width()/2,
-                  surf.get_height()/2, zoom, squash, shading)
+        self.draw(surf, surf.get_width()/2, surf.get_height()/2, zoom, squash)
         self.setRotation(temp)
+    
+    def bake(self, shading = 0.5, shadowSigma = 0.75, method = PREBAKE_MULTIPLY):
+        # The bake method will pre-render shadows
+        # This will allow for faster compiling, and wont require additional memory, but will render a model reload if we want to change the shading
+        lightMask = np.ones((self.slices[0].get_width(), self.slices[0].get_height(), 3))
+        for i in range(self.numSlices):
+            # Calculate the shadow mask for the current slice
+            shadowMask = np.where(pygame.surfarray.array_alpha(self.slices[i]) > 0, shading, 1)
+            # Make it a 3d array that has 0:2 as the RGB values, replicating the shading value
+            shadowMask = np.repeat(shadowMask[:, :, np.newaxis], 3, axis=2)
+            # Apply the light mask to the current slice
+            sliceNumpy = pygame.surfarray.pixels3d(self.slices[i]).astype("float32")
+            sliceNumpy *= lightMask
+            # Update the slice with the new values
+            pygame.surfarray.pixels3d(self.slices[i])[:] = sliceNumpy
+            # Apply the shadow mask to the light mask, based on the method
+            if method == PREBAKE_MULTIPLY:
+                lightMask *= shadowMask
+            elif method == PREBAKE_MINIMUM:
+                lightMask = np.minimum(lightMask, shadowMask)
+            # Apply gaussian blur to the light mask
+            lightMask = scipy.ndimage.filters.gaussian_filter(lightMask, shadowSigma, mode = 'constant', cval = 1.0)
+        
+        # The base shadow is then the light mask. We will convert it to a surface
+        self.baseShadow = pygame.Surface((self.slices[0].get_width(), self.slices[0].get_height()), pygame.SRCALPHA)
+        # Set the alpha channel to the 255*(1-lightMask) value
+        pygame.surfarray.pixels_alpha(self.baseShadow)[:] = 255*(1-lightMask[:,:,0])
 
-    def compile(self, angles=180, zoom=1, squash=0.5, shading=0):
+    def compile(self, angles=180, zoom=1, squash=0.5, bake = PREBAKE_MULTIPLY, shading=0.5, shadowSigma = 1):
         self.rendered = []
         # Calculate the size of the buffer surface
         # It is determined by the base of the model size times the zoom, then rotated 45 degrees (max)
-        # To calculate the diagonal, we use the pythagorean theorem. One issue is that we are in the isometric space, so the projected angle is not rectangular.
         # We will simulate the bounding box of the whole model, then calculate the coords of certaing corners. Project them in the isometric space, and calculate the dimensions.
-        w = self.slices[0].get_width()*zoom
-        h = self.slices[0].get_height()*zoom
-        zheight = self.numSlices*zoom
-        # pleft   = coordsToIso((0, 0, 0))
-        # print("pleft: " + str(pleft))
-        # pright  = coordsToIso((w, h, 0))
-        # print("pright: " + str(pright))
-        # ptop    = coordsToIso((w, 0, zheight))
-        # print("ptop: " + str(ptop))
-        # pbot    = coordsToIso((0, h, 0))
-        # print("pbot: " + str(pbot))
+        w = self.slices[0].get_width() * zoom
+        h = self.slices[0].get_height() * zoom
+        zheight = self.numSlices * zoom
         pleft   = (0, h, 0)
         pright  = (w, 0, 0)
         ptop    = (w, h, 0)
@@ -144,6 +120,9 @@ class Model:
         # Finally, calculate the dimensions of the bounding box
         bbowDim = (math.ceil(pointDistance2D(pleft, pright)), math.ceil(pointDistance2D(pbot, ptop)))
         print("Bounding box: " + str(bbowDim))
+        # If the bake flag is set, we will bake the shadows into the non-rotated model
+        if bake:
+            self.bake(shading, shadowSigma, bake)
         surf = pygame.Surface(bbowDim, pygame.SRCALPHA)
         surfMin = pygame.Surface(bbowDim, pygame.SRCALPHA)
         angl360 = 360/angles
@@ -151,11 +130,8 @@ class Model:
             print("Rendering: " + str(rot) + "/" + str(angles))
             surf.fill((0, 0, 0, 0))
             # draw start
-            self.drawRotate(surf, rot*angl360, zoom, squash, shading)
-            # draw end
-
+            self.drawRotate(surf, rot*angl360, zoom, squash)
             render = pygame.transform.rotozoom(surf, 0, 0.5)
-
             self.rendered.append(render)
             surfMin.blit(render, (0, 0))
 
